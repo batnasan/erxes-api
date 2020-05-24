@@ -1,6 +1,5 @@
 import { ActivityLogs, Checklists, Conformities, Stages, Tickets } from '../../../db/models';
 import { getCompanies, getCustomers } from '../../../db/models/boardUtils';
-import { IOrderInput } from '../../../db/models/definitions/boards';
 import { BOARD_STATUSES, BOARD_TYPES, NOTIFICATION_TYPES } from '../../../db/models/definitions/constants';
 import { ITicket } from '../../../db/models/definitions/tickets';
 import { graphqlPubsub } from '../../../pubsub';
@@ -136,7 +135,6 @@ const ticketMutations = {
     if (oldTicket.stageId === updatedTicket.stageId) {
       graphqlPubsub.publish('ticketsChanged', {
         ticketsChanged: updatedTicket,
-        user,
       });
 
       return updatedTicket;
@@ -162,7 +160,6 @@ const ticketMutations = {
         _id: updatedStage.pipelineId,
         type: BOARD_TYPES.TICKET,
       },
-      user,
     });
 
     if (updatedStage.pipelineId !== oldStage.pipelineId) {
@@ -171,7 +168,6 @@ const ticketMutations = {
           _id: oldStage.pipelineId,
           type: BOARD_TYPES.TICKET,
         },
-        user,
       });
     }
 
@@ -227,18 +223,10 @@ const ticketMutations = {
           _id: stage.pipelineId,
           type: BOARD_TYPES.TICKET,
         },
-        user,
       });
     }
 
     return ticket;
-  },
-
-  /**
-   * Update ticket orders (not sendNotifaction, ordered card to change)
-   */
-  ticketsUpdateOrder(_root, { stageId, orders }: { stageId: string; orders: IOrderInput[] }) {
-    return Tickets.updateOrder(stageId, orders);
   },
 
   /**
@@ -318,7 +306,6 @@ const ticketMutations = {
 
 checkPermission(ticketMutations, 'ticketsAdd', 'ticketsAdd');
 checkPermission(ticketMutations, 'ticketsEdit', 'ticketsEdit');
-checkPermission(ticketMutations, 'ticketsUpdateOrder', 'ticketsUpdateOrder');
 checkPermission(ticketMutations, 'ticketsRemove', 'ticketsRemove');
 checkPermission(ticketMutations, 'ticketsWatch', 'ticketsWatch');
 checkPermission(ticketMutations, 'ticketsArchive', 'ticketsArchive');

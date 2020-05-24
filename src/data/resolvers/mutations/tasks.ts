@@ -1,6 +1,6 @@
 import { ActivityLogs, Checklists, Conformities, Stages, Tasks } from '../../../db/models';
 import { getCompanies, getCustomers } from '../../../db/models/boardUtils';
-import { IItemCommonFields as ITask, IOrderInput } from '../../../db/models/definitions/boards';
+import { IItemCommonFields as ITask } from '../../../db/models/definitions/boards';
 import { BOARD_STATUSES, BOARD_TYPES, NOTIFICATION_TYPES } from '../../../db/models/definitions/constants';
 import { graphqlPubsub } from '../../../pubsub';
 import { MODULE_NAMES } from '../../constants';
@@ -135,7 +135,6 @@ const taskMutations = {
     if (oldTask.stageId === updatedTask.stageId) {
       graphqlPubsub.publish('tasksChanged', {
         tasksChanged: updatedTask,
-        user,
       });
 
       return updatedTask;
@@ -161,7 +160,6 @@ const taskMutations = {
         _id: updatedStage.pipelineId,
         type: BOARD_TYPES.TASK,
       },
-      user,
     });
 
     if (updatedStage.pipelineId !== oldStage.pipelineId) {
@@ -170,7 +168,6 @@ const taskMutations = {
           _id: oldStage.pipelineId,
           type: BOARD_TYPES.TASK,
         },
-        user,
       });
     }
 
@@ -226,18 +223,10 @@ const taskMutations = {
           _id: stage.pipelineId,
           type: BOARD_TYPES.TASK,
         },
-        user,
       });
     }
 
     return task;
-  },
-
-  /**
-   * Update task orders (not sendNotifaction, ordered card to change)
-   */
-  tasksUpdateOrder(_root, { stageId, orders }: { stageId: string; orders: IOrderInput[] }) {
-    return Tasks.updateOrder(stageId, orders);
   },
 
   /**
@@ -315,7 +304,6 @@ const taskMutations = {
 
 checkPermission(taskMutations, 'tasksAdd', 'tasksAdd');
 checkPermission(taskMutations, 'tasksEdit', 'tasksEdit');
-checkPermission(taskMutations, 'tasksUpdateOrder', 'tasksUpdateOrder');
 checkPermission(taskMutations, 'tasksRemove', 'tasksRemove');
 checkPermission(taskMutations, 'tasksWatch', 'tasksWatch');
 checkPermission(taskMutations, 'tasksArchive', 'tasksArchive');
