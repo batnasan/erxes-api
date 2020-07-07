@@ -49,6 +49,7 @@ export interface ICustomer {
   description?: string;
   doNotDisturb?: string;
   emailValidationStatus?: string;
+  phoneValidationStatus?: string;
   links?: ILink;
   relatedIntegrationIds?: string[];
   integrationId?: string;
@@ -68,6 +69,12 @@ export interface ICustomer {
   isOnline?: boolean;
   lastSeenAt?: Date;
   sessionCount?: number;
+}
+
+export interface IValidationResponse {
+  email?: string;
+  phone?: string;
+  status: string;
 }
 
 export interface ICustomerDocument extends ICustomer, Document {
@@ -132,7 +139,7 @@ export const customerSchema = schemaWrapper(
     birthDate: field({ type: Date, label: 'Date of birth', optional: true }),
     sex: field({
       type: Number,
-      label: 'Sex',
+      label: 'Pronoun',
       optional: true,
       esType: 'keyword',
       default: 0,
@@ -153,6 +160,15 @@ export const customerSchema = schemaWrapper(
 
     primaryPhone: field({ type: String, label: 'Primary Phone', optional: true }),
     phones: field({ type: [String], optional: true, label: 'Phones' }),
+
+    phoneValidationStatus: field({
+      type: String,
+      enum: getEnum('PHONE_VALIDATION_STATUSES'),
+      default: 'unknown',
+      label: 'Phone validation status',
+      esType: 'keyword',
+      selectOptions: CUSTOMER_SELECT_OPTIONS.PHONE_VALIDATION_STATUSES,
+    }),
     profileScore: field({ type: Number, index: true, optional: true, label: 'Profile score' }),
 
     ownerId: field({ type: String, optional: true, label: 'Owner' }),

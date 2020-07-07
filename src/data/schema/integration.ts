@@ -76,6 +76,7 @@ export const types = `
     showChat: Boolean
     showLauncher: Boolean
     forceLogoutWhenResolve: Boolean
+    showVideoCallRequest: Boolean
   }
 
   input MessengerUiOptions {
@@ -170,30 +171,6 @@ export const mutations = `
     kind: String
     references: String
     attachments: [JSON]
-  ): JSON
-
-  integrationAddExchangeAccount(
-    email: String!
-    password: String!
-    host: String!
-    username: String
-    kind: String
-  ): JSON
-
-  integrationAddImapAccount(
-    email: String!
-    password: String!
-    imapHost: String!
-    imapPort: Int!
-    smtpHost: String!
-    smtpPort: Int!
-    kind: String!
-  ): JSON
-
-  integrationAddMailAccount(
-    email: String!
-    password: String!
-    kind: String!
   ): JSON
 
   integrationsUpdateConfigs(configsMap: JSON!): JSON

@@ -1,5 +1,7 @@
+import { tableSchema } from '../tablePrefix';
+
 cube(`Customers`, {
-  sql: `SELECT * FROM erxes.customers`,
+  sql: `SELECT * FROM ${tableSchema()}.customers`,
 
   joins: {
     Integrations: {
@@ -48,6 +50,11 @@ cube(`Customers`, {
 
     emailvalidationstatus: {
       sql: `${CUBE}.\`emailValidationStatus\``,
+      type: `string`,
+    },
+
+    phonevalidationstatus: {
+      sql: `${CUBE}.\`phoneValidationStatus\``,
       type: `string`,
     },
 

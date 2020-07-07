@@ -11,7 +11,6 @@ import { Configs, Customers, Notifications, Users } from '../db/models';
 import { IUser, IUserDocument } from '../db/models/definitions/users';
 import { OnboardingHistories } from '../db/models/Robot';
 import { debugBase, debugEmail, debugExternalApi } from '../debuggers';
-import { sendMessage } from '../messageBroker';
 import { graphqlPubsub } from '../pubsub';
 import { get, set } from '../redisClient';
 
@@ -124,8 +123,11 @@ const createGCS = async () => {
 /*
  * Save binary data to amazon s3
  */
-export const uploadFileAWS = async (file: { name: string; path: string; type: string }): Promise<string> => {
-  const IS_PUBLIC = await getConfig('FILE_SYSTEM_PUBLIC', 'true');
+export const uploadFileAWS = async (
+  file: { name: string; path: string; type: string },
+  forcePrivate: boolean = false,
+): Promise<string> => {
+  const IS_PUBLIC = forcePrivate ? false : await getConfig('FILE_SYSTEM_PUBLIC', 'true');
   const AWS_PREFIX = await getConfig('AWS_PREFIX');
   const AWS_BUCKET = await getConfig('AWS_BUCKET');
 
@@ -164,7 +166,7 @@ export const uploadFileAWS = async (file: { name: string; path: string; type: st
 /*
  * Delete file from amazon s3
  */
-const deleteFileAWS = async (fileName: string) => {
+export const deleteFileAWS = async (fileName: string) => {
   const AWS_BUCKET = await getConfig('AWS_BUCKET');
 
   const params = { Bucket: AWS_BUCKET, Key: fileName };
@@ -387,7 +389,9 @@ export interface IEmailParams {
   toEmails?: string[];
   fromEmail?: string;
   title?: string;
-  template?: { name?: string; data?: any; isCustom?: boolean };
+  customHtml?: string;
+  customHtmlData?: any;
+  template?: { name?: string; data?: any };
   modifier?: (data: any, email: string) => void;
 }
 
@@ -395,7 +399,7 @@ export interface IEmailParams {
  * Send email
  */
 export const sendEmail = async (params: IEmailParams) => {
-  const { toEmails = [], fromEmail, title, template = {}, modifier } = params;
+  const { toEmails = [], fromEmail, title, customHtml, customHtmlData, template = {}, modifier } = params;
 
   const NODE_ENV = getEnv({ name: 'NODE_ENV' });
   const DEFAULT_EMAIL_SERVICE = await getConfig('DEFAULT_EMAIL_SERVICE', 'SES');
@@ -417,7 +421,7 @@ export const sendEmail = async (params: IEmailParams) => {
     return debugEmail(e.message);
   }
 
-  const { isCustom, data = {}, name } = template;
+  const { data = {}, name } = template;
 
   // for unsubscribe url
   data.domain = MAIN_APP_DOMAIN;
@@ -430,8 +434,8 @@ export const sendEmail = async (params: IEmailParams) => {
     // generate email content by given template
     let html = await applyTemplate(data, name || 'base');
 
-    if (!isCustom) {
-      html = await applyTemplate({ content: html }, 'base');
+    if (customHtml) {
+      html = Handlebars.compile(customHtml)(customHtmlData || {});
     }
 
     const mailOptions = {
@@ -570,7 +574,7 @@ interface IRequestParams {
   method?: string;
   headers?: { [key: string]: string };
   params?: { [key: string]: string };
-  body?: { [key: string]: string };
+  body?: { [key: string]: any };
   form?: { [key: string]: string };
 }
 
@@ -818,52 +822,6 @@ export const handleUnsubscription = async (query: { cid: string; uid: string }) 
   return true;
 };
 
-export const validateEmail = async (email: string, wait?: boolean) => {
-  const data = { email };
-
-  const EMAIL_VERIFIER_ENDPOINT = getEnv({ name: 'EMAIL_VERIFIER_ENDPOINT', defaultValue: '' });
-
-  if (!EMAIL_VERIFIER_ENDPOINT) {
-    return sendMessage('erxes-api:email-verifier-notification', { action: 'emailVerify', data });
-  }
-
-  const requestOptions = {
-    url: `${EMAIL_VERIFIER_ENDPOINT}/verify-single`,
-    method: 'POST',
-    body: { email },
-  };
-
-  const updateCustomer = status =>
-    Customers.updateOne({ primaryEmail: email }, { $set: { emailValidationStatus: status } });
-
-  const successCallback = response => updateCustomer(response.status);
-
-  const errorCallback = e => {
-    if (e.message === 'timeout exceeded') {
-      return updateCustomer('unverifiable');
-    }
-
-    debugExternalApi(`Error occurred during email verify ${e.message}`);
-  };
-
-  if (wait) {
-    try {
-      const response = await sendRequest(requestOptions);
-      return successCallback(response);
-    } catch (e) {
-      await errorCallback(e);
-    }
-  }
-
-  sendRequest(requestOptions)
-    .then(async response => {
-      await successCallback(response);
-    })
-    .catch(async e => {
-      await errorCallback(e);
-    });
-};
-
 export const getConfigs = async () => {
   const configsCache = await get('configs_erxes_api');
 
@@ -918,6 +876,7 @@ export const getSubServiceDomain = ({ name }: { name: string }): string => {
     INTEGRATIONS_API_DOMAIN: `${MAIN_APP_DOMAIN}/integrations`,
     LOGS_API_DOMAIN: `${MAIN_APP_DOMAIN}/logs`,
     ENGAGES_API_DOMAIN: `${MAIN_APP_DOMAIN}/engages`,
+    VERIFIER_API_DOMAIN: `${MAIN_APP_DOMAIN}/verifier`,
   };
 
   const domain = getEnv({ name });
@@ -927,4 +886,35 @@ export const getSubServiceDomain = ({ name }: { name: string }): string => {
   }
 
   return defaultMappings[name];
+};
+
+export const chunkArray = (myArray, chunkSize: number) => {
+  let index = 0;
+
+  const arrayLength = myArray.length;
+  const tempArray: any[] = [];
+
+  for (index = 0; index < arrayLength; index += chunkSize) {
+    const myChunk = myArray.slice(index, index + chunkSize);
+
+    // Do something if you want with the group
+    tempArray.push(myChunk);
+  }
+
+  return tempArray;
+};
+
+/**
+ * Create s3 stream for excel file
+ */
+export const s3Stream = async (key: string, errorCallback: (error: any) => void): Promise<any> => {
+  const AWS_BUCKET = await getConfig('AWS_BUCKET');
+
+  const s3 = await createAWS();
+
+  const stream = s3.getObject({ Bucket: AWS_BUCKET, Key: key }).createReadStream();
+
+  stream.on('error', errorCallback);
+
+  return stream;
 };
